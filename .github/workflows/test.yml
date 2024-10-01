@@ -6,6 +6,8 @@ jobs:
     steps:
       - name: checkout repo
         uses: actions/checkout@v3
+        with:
+          submodules: 'true'
       - run: cat /sys/devices/system/cpu/cpu0/cache/index0/level &&
              cat /sys/devices/system/cpu/cpu0/cache/index0/type &&
              cat /sys/devices/system/cpu/cpu0/cache/index0/size &&
@@ -16,4 +18,4 @@ jobs:
              cd build &&
              cmake .. -GNinja &&
              ninja &&
-             DEBUG_DUMP ./measure
+             DEBUG_DUMP=1 ./measure
