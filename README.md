@@ -1,5 +1,26 @@
 # VM Course HW 1
 
+## Usage
+
+```sh
+mkdir build
+cd build
+cmake .. -G Ninja -DCMAKE_CXX_FLAGS="-O0"
+ninja
+./measure
+```
+
+It's important that it's build with no optimizations.
+
+## Output for my machine
+
+```sh
+$ ./measure
+Size = 32768
+Assoc = 8
+BlockSize = 64
+```
+
 ## Real answer for my machine
 
 AMD Ryzen 7 5800U with Radeon Graphics, 8 cores.
