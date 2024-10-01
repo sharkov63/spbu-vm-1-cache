@@ -3,9 +3,7 @@
 #include <array>
 #include <chrono>
 #include <iostream>
-#include <unistd.h>
 
-static constexpr int PageSizeBytes = 4096;
 static constexpr int MaxTestRegionSizeBytes = 128 * 1024 * 1024;
 static constexpr int MeasureIters = 1024 * 1024;
 static constexpr int MaxWaySize = 1024 * 1024;
@@ -148,11 +146,6 @@ static int runRobustBlockSize(int Size, int Assoc) {
 }
 
 static void runMeasureTool() {
-  if (int RealPageSize = getpagesize(); RealPageSize != PageSizeBytes) {
-    throw std::runtime_error(
-        fmt::format("Oops, expected page size {}, but actually it's {}\n",
-                    PageSizeBytes, RealPageSize));
-  }
   auto [Size, Assoc] = runRobustSizeAndAssoc();
   std::cerr << fmt::format("Size = {}\n", Size);
   std::cerr << fmt::format("Assoc = {}\n", Assoc);
