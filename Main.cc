@@ -16,7 +16,7 @@ alignas(1024 * 1024) char TestRegion[MaxTestRegionSizeBytes];
 
 bool DebugDump = false;
 
-size_t Dummy;
+intptr_t Dummy;
 
 static auto now() { return std::chrono::high_resolution_clock::now(); }
 
@@ -40,7 +40,7 @@ static auto measureForPointerChain(char *Initial) {
   STEP_10000;
   STEP_10000;
   auto Finish = now();
-  Dummy += (size_t)Current;
+  Dummy += (intptr_t)Current;
   auto Duration = Finish - Start;
   return Duration;
 }
