@@ -18,9 +18,10 @@ bool DebugDump = false;
 
 intptr_t Dummy;
 
-static auto now() { return std::chrono::high_resolution_clock::now(); }
+using Clock = std::chrono::high_resolution_clock;
+using Duration = Clock::duration;
 
-using Duration = std::chrono::high_resolution_clock::duration;
+static auto now() { return Clock::now(); }
 
 static auto measureForPointerChain(char *Initial) {
   char *Current = Initial;
@@ -154,16 +155,8 @@ static void runMeasureTool() {
 }
 
 int main() {
-  // struct sched_param SchedParam;
-  // if (int ret = sched_getparam(0, &SchedParam); ret == -1) {
-  //   std::cerr << fmt::format("sched_getparam failed\n");
-  //   return -1;
-  // }
-  // SchedParam.sched_priority = sched_get_priority_max(SCHED_FIFO);
-  // if (int ret = sched_setscheduler(0, SCHED_FIFO, &SchedParam); ret == -1) {
-  //   std::cerr << fmt::format("sched_setscheduler failed\n");
-  //   return -1;
-  // }
+  std::cerr << "std::chrono::high_resolution_clock::period = " << Clock::period::num
+            << '/' << Clock::period::den << '\n';
   if (char *DebugDumpValue = std::getenv("DEBUG_DUMP");
       DebugDumpValue && std::string(DebugDumpValue) == "1") {
     DebugDump = true;
