@@ -11,7 +11,7 @@ jobs:
              cat /sys/devices/system/cpu/cpu0/cache/index0/size &&
              cat /sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size &&
              cat /sys/devices/system/cpu/cpu0/cache/index0/ways_of_associativity
-      - run: sudo apt install git cmake ninja &&
+      - run: sudo apt install git cmake ninja-build &&
              mkdir -p build &&
              cd build &&
              cmake .. -GNinja &&
