@@ -1,5 +1,6 @@
 #include "fmt/chrono.h"
 #include "fmt/format.h"
+#include <array>
 #include <chrono>
 #include <iostream>
 #include <unistd.h>
@@ -10,13 +11,18 @@ static constexpr int MeasureIters = 1024 * 1024;
 static constexpr int MaxWaySize = 1024 * 1024;
 static constexpr int MinBlockSize = 16;
 static constexpr int MaxBlockSize = 1024;
-static constexpr double JumpFactor = 1.3;
+static constexpr double MissFactor = 2.0;
+static constexpr int MaxAssoc = 64;
 
 alignas(1024 * 1024) char TestRegion[MaxTestRegionSizeBytes];
 
-static auto now() { return std::chrono::high_resolution_clock::now(); }
+bool DebugDump = false;
 
 size_t Dummy;
+
+static auto now() { return std::chrono::high_resolution_clock::now(); }
+
+using Duration = std::chrono::high_resolution_clock::duration;
 
 static auto measureForPointerChain(char *Initial) {
   char *Current = Initial;
@@ -26,12 +32,17 @@ static auto measureForPointerChain(char *Initial) {
 #define STEP_10 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1
 #define STEP_100 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10
 #define STEP_1000 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100
+#define STEP_10000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000
   // clang-format on
 
-  STEP_10; // warm up
+  STEP_100; // warm up
   auto Start = now();
-  STEP_1000;
+  STEP_10000;
+  STEP_10000;
+  STEP_10000;
+  STEP_10000;
   auto Finish = now();
+  Dummy += (size_t)Current;
   auto Duration = Finish - Start;
   return Duration;
 }
@@ -76,12 +87,24 @@ struct SizeAndAssoc {
 
 static SizeAndAssoc runRobustSizeAndAssoc() {
   auto GetAssocFor = [](int Stride) {
-    auto OldTime = measureForArithmeticSeq(Stride, 1);
-    for (int Assoc = 2; Assoc <= 64; ++Assoc) {
-      auto Time = measureForArithmeticSeq(Stride, Assoc);
-      if (Time.count() / (double)OldTime.count() > JumpFactor)
+    std::array<Duration, MaxAssoc + 2> RealMeasurements, HitMeasurements;
+    for (int Assoc = 1; Assoc <= MaxAssoc + 1; ++Assoc) {
+      RealMeasurements[Assoc] = measureForArithmeticSeq(Stride, Assoc);
+      if (DebugDump) {
+        std::cerr << fmt::format("Stride = {} Assoc = {}: {}\n", Stride, Assoc,
+                                 RealMeasurements[Assoc]);
+      }
+      HitMeasurements[Assoc] = measureForArithmeticSeq(256, Assoc);
+      if (DebugDump) {
+        std::cerr << fmt::format("Stride = {} Assoc = {}: fakeTime = {}\n",
+                                 Stride, Assoc, HitMeasurements[Assoc]);
+      }
+    }
+    for (int Assoc = 2; Assoc <= MaxAssoc + 1; ++Assoc) {
+      double Ratio = RealMeasurements[Assoc].count() /
+                     (double)HitMeasurements[Assoc].count();
+      if (Ratio > MissFactor)
         return Assoc - 1;
-      OldTime = Time;
     }
     throw std::runtime_error(
         fmt::format("Failed to get Assoc for Stride {}", Stride));
@@ -90,6 +113,9 @@ static SizeAndAssoc runRobustSizeAndAssoc() {
   int OldAssoc;
   for (int WaySize = MaxWaySize; WaySize >= 16; WaySize /= 2) {
     int Assoc = GetAssocFor(WaySize);
+    if (DebugDump) {
+      std::cerr << fmt::format("WaySize = {} Assoc = {}\n", WaySize, Assoc);
+    }
     if (WaySize != MaxWaySize && Assoc == 2 * OldAssoc) {
       return SizeAndAssoc{
           .Size = 2 * WaySize * OldAssoc,
@@ -103,7 +129,7 @@ static SizeAndAssoc runRobustSizeAndAssoc() {
 
 static int runRobustBlockSize(int Size, int Assoc) {
   int WaySize = Size / Assoc;
-  std::chrono::high_resolution_clock::duration OldTime;
+  Duration OldTime;
   for (int CurrentBlockSize = MinBlockSize;
        CurrentBlockSize <= 2 * MaxBlockSize; CurrentBlockSize *= 2) {
     chainPointersForArithmeticSeq(TestRegion, WaySize, Assoc / 2);
@@ -113,7 +139,7 @@ static int runRobustBlockSize(int Size, int Assoc) {
     setPointer(TestRegion[0], Next + WaySize * (Assoc / 2));
     auto Time = measureForPointerChain(TestRegion);
     if (CurrentBlockSize > MinBlockSize &&
-        OldTime.count() / (double)Time.count() > JumpFactor) {
+        OldTime.count() / (double)Time.count() > MissFactor) {
       return CurrentBlockSize;
     }
     OldTime = Time;
@@ -135,6 +161,20 @@ static void runMeasureTool() {
 }
 
 int main() {
+  // struct sched_param SchedParam;
+  // if (int ret = sched_getparam(0, &SchedParam); ret == -1) {
+  //   std::cerr << fmt::format("sched_getparam failed\n");
+  //   return -1;
+  // }
+  // SchedParam.sched_priority = sched_get_priority_max(SCHED_FIFO);
+  // if (int ret = sched_setscheduler(0, SCHED_FIFO, &SchedParam); ret == -1) {
+  //   std::cerr << fmt::format("sched_setscheduler failed\n");
+  //   return -1;
+  // }
+  if (char *DebugDumpValue = std::getenv("DEBUG_DUMP");
+      DebugDumpValue && std::string(DebugDumpValue) == "1") {
+    DebugDump = true;
+  }
   try {
     runMeasureTool();
   } catch (std::runtime_error &Error) {

@@ -2,15 +2,18 @@
 
 ## Usage
 
+After `git clone`, please initialize all submodules:
+```
+git submodule update --init --recursive
+```
+
 ```sh
 mkdir build
 cd build
-cmake .. -G Ninja -DCMAKE_CXX_FLAGS="-O0"
-ninja
+cmake ..
+make
 ./measure
 ```
-
-It's important that it's build with no optimizations.
 
 ## Output for my machine
 
