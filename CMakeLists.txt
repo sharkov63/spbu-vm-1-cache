@@ -1,5 +1,8 @@
 project(spbu-vm-1-cache)
 
-add_executable(estimate-cache-specs
+add_subdirectory(fmt)
+
+add_executable(measure
   Main.cc
 )
+target_link_libraries(measure fmt::fmt-header-only)
