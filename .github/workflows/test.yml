@@ -1,0 +1,11 @@
+name: test
+on: push
+jobs:
+  do_all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+      - run: apt update &&
+             apt upgrade &&
+             apt install git cmake ninja
