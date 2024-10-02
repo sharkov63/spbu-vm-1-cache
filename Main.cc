@@ -30,8 +30,8 @@ void warmUp() {
   char *Current = TestRegion2;
   for (int I = 0; I < 8 * WarmUpCount; ++I) {
     Current = *reinterpret_cast<char **>(Current);
-    Dummy += (intptr_t)Current;
   }
+  Dummy += (intptr_t)Current;
 }
 
 static auto measureForPointerChain(char *Initial) {
