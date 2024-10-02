@@ -5,7 +5,7 @@
 #include <iostream>
 
 static constexpr int MaxTestRegionSizeBytes = 128 * 1024 * 1024;
-static constexpr int MeasureIters = 64 * 1024 * 1024;
+static constexpr int MeasureIters = 8 * 1024 * 1024;
 static constexpr int MaxWaySize = 1024 * 128;
 static constexpr int MinBlockSize = 16;
 static constexpr int MaxBlockSize = 1024;
