@@ -34,14 +34,31 @@ void warmUp() {
   Dummy += (intptr_t)Current;
 }
 
-static auto measureForPointerChain(char *Initial) {
+static Duration measureForPointerChain(char *Initial) {
   warmUp();
-  auto Start = now();
+
   char *Current = Initial;
-  for (int I = 0; I < MeasureIters; ++I) {
-    Current = *reinterpret_cast<char **>(Current);
-  }
+  // clang-format off
+#define STEP_1 Current = *reinterpret_cast<char **>(Current);
+#define STEP_10 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1
+#define STEP_100 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10
+#define STEP_1000 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100
+#define STEP_10000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000
+  // clang-format on
+
+  STEP_100; // warm up
+  auto Start = now();
+  STEP_10000;
+  STEP_10000;
+  STEP_10000;
+  STEP_10000;
   auto Finish = now();
+
+  // auto Start = now();
+  // for (int I = 0; I < MeasureIters; ++I) {
+  //   Current = *reinterpret_cast<char **>(Current);
+  // }
+  // auto Finish = now();
   Dummy += (intptr_t)Current;
   auto Duration = Finish - Start;
   return Duration;
