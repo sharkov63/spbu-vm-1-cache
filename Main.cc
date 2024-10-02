@@ -5,7 +5,7 @@
 #include <iostream>
 
 static constexpr int MaxTestRegionSizeBytes = 128 * 1024 * 1024;
-static constexpr int MeasureIters = 8 * 1024 * 1024;
+static constexpr int MeasureIters = 256 * 1024 * 1024;
 static constexpr int MaxWaySize = 1024 * 128;
 static constexpr int MinBlockSize = 16;
 static constexpr int MaxBlockSize = 1024;
@@ -21,7 +21,7 @@ bool DebugDump = false;
 
 intptr_t Dummy;
 
-using Clock = std::chrono::high_resolution_clock;
+using Clock = std::chrono::steady_clock;
 using Duration = Clock::duration;
 
 static auto now() { return Clock::now(); }
@@ -159,8 +159,8 @@ static void runMeasureTool() {
 }
 
 int main() {
-  std::cerr << "std::chrono::high_resolution_clock::period = "
-            << Clock::period::num << '/' << Clock::period::den << '\n';
+  std::cerr << "std::chrono::steady_clock::period = " << Clock::period::num
+            << '/' << Clock::period::den << '\n';
   if (char *DebugDumpValue = std::getenv("DEBUG_DUMP");
       DebugDumpValue && std::string(DebugDumpValue) == "1") {
     DebugDump = true;
