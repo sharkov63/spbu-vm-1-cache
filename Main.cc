@@ -5,14 +5,17 @@
 #include <iostream>
 
 static constexpr int MaxTestRegionSizeBytes = 128 * 1024 * 1024;
-static constexpr int MeasureIters = 1024 * 1024;
-static constexpr int MaxWaySize = 1024 * 1024;
+static constexpr int MeasureIters = 8 * 1024 * 1024;
+static constexpr int MaxWaySize = 1024 * 128;
 static constexpr int MinBlockSize = 16;
 static constexpr int MaxBlockSize = 1024;
-static constexpr double MissFactor = 2.0;
-static constexpr int MaxAssoc = 64;
+static constexpr double MissFactor = 1.05;
+static constexpr int MaxAssoc = 32;
+static constexpr int WarmUpCount = 8 * 1024;
+static constexpr int WarmUpStride = 64;
 
-alignas(1024 * 1024) char TestRegion[MaxTestRegionSizeBytes];
+alignas(1024 * 1024) char TestRegion1[MaxTestRegionSizeBytes];
+alignas(1024 * 1024) char TestRegion2[MaxTestRegionSizeBytes];
 
 bool DebugDump = false;
 
@@ -23,23 +26,21 @@ using Duration = Clock::duration;
 
 static auto now() { return Clock::now(); }
 
+void warmUp() {
+  char *Current = TestRegion2;
+  for (int I = 0; I < 2 * WarmUpCount; ++I) {
+    Current = *reinterpret_cast<char **>(Current);
+    Dummy += (intptr_t)Current;
+  }
+}
+
 static auto measureForPointerChain(char *Initial) {
-  char *Current = Initial;
-
-  // clang-format off
-#define STEP_1 Current = *reinterpret_cast<char **>(Current);
-#define STEP_10 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1 STEP_1
-#define STEP_100 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10 STEP_10
-#define STEP_1000 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100 STEP_100
-#define STEP_10000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000 STEP_1000
-  // clang-format on
-
-  STEP_100; // warm up
+  warmUp();
   auto Start = now();
-  STEP_10000;
-  STEP_10000;
-  STEP_10000;
-  STEP_10000;
+  char *Current = Initial;
+  for (int I = 0; I < MeasureIters; ++I) {
+    Current = *reinterpret_cast<char **>(Current);
+  }
   auto Finish = now();
   Dummy += (intptr_t)Current;
   auto Duration = Finish - Start;
@@ -74,9 +75,9 @@ static void preparePointerChainForArithmeticSeq(char *Region, int RegionSize,
 }
 
 static auto measureForArithmeticSeq(int Stride, int Count) {
-  preparePointerChainForArithmeticSeq(TestRegion, sizeof(TestRegion), Stride,
+  preparePointerChainForArithmeticSeq(TestRegion1, sizeof(TestRegion1), Stride,
                                       Count);
-  return measureForPointerChain(&TestRegion[Stride * (Count - 1)]);
+  return measureForPointerChain(&TestRegion1[Stride * (Count - 1)]);
 }
 
 struct SizeAndAssoc {
@@ -89,14 +90,13 @@ static SizeAndAssoc runRobustSizeAndAssoc() {
     std::array<Duration, MaxAssoc + 2> RealMeasurements, HitMeasurements;
     for (int Assoc = 1; Assoc <= MaxAssoc + 1; ++Assoc) {
       RealMeasurements[Assoc] = measureForArithmeticSeq(Stride, Assoc);
-      if (DebugDump) {
-        std::cerr << fmt::format("Stride = {} Assoc = {}: {}\n", Stride, Assoc,
-                                 RealMeasurements[Assoc]);
-      }
       HitMeasurements[Assoc] = measureForArithmeticSeq(256, Assoc);
       if (DebugDump) {
-        std::cerr << fmt::format("Stride = {} Assoc = {}: fakeTime = {}\n",
-                                 Stride, Assoc, HitMeasurements[Assoc]);
+        std::cerr << fmt::format(
+            "Stride = {} Assoc = {}: real/hit = {}/{} = {}\n", Stride, Assoc,
+            RealMeasurements[Assoc], HitMeasurements[Assoc],
+            RealMeasurements[Assoc].count() /
+                (double)HitMeasurements[Assoc].count());
       }
     }
     for (int Assoc = 2; Assoc <= MaxAssoc + 1; ++Assoc) {
@@ -131,12 +131,12 @@ static int runRobustBlockSize(int Size, int Assoc) {
   Duration OldTime;
   for (int CurrentBlockSize = MinBlockSize;
        CurrentBlockSize <= 2 * MaxBlockSize; CurrentBlockSize *= 2) {
-    chainPointersForArithmeticSeq(TestRegion, WaySize, Assoc / 2);
-    char *Next = TestRegion + WaySize * (Assoc / 2) + CurrentBlockSize;
-    setPointer(*Next, &TestRegion[WaySize * (Assoc / 2 - 1)]);
+    chainPointersForArithmeticSeq(TestRegion1, WaySize, Assoc / 2);
+    char *Next = TestRegion1 + WaySize * (Assoc / 2) + CurrentBlockSize;
+    setPointer(*Next, &TestRegion1[WaySize * (Assoc / 2 - 1)]);
     chainPointersForArithmeticSeq(Next, WaySize, Assoc / 2 + 1);
-    setPointer(TestRegion[0], Next + WaySize * (Assoc / 2));
-    auto Time = measureForPointerChain(TestRegion);
+    setPointer(TestRegion1[0], Next + WaySize * (Assoc / 2));
+    auto Time = measureForPointerChain(TestRegion1);
     if (CurrentBlockSize > MinBlockSize &&
         OldTime.count() / (double)Time.count() > MissFactor) {
       return CurrentBlockSize;
@@ -147,6 +147,8 @@ static int runRobustBlockSize(int Size, int Assoc) {
 }
 
 static void runMeasureTool() {
+  chainPointersForArithmeticSeq(TestRegion2, WarmUpStride, WarmUpCount);
+  setPointer(*TestRegion2, &TestRegion2[WarmUpStride * (WarmUpCount - 1)]);
   auto [Size, Assoc] = runRobustSizeAndAssoc();
   std::cerr << fmt::format("Size = {}\n", Size);
   std::cerr << fmt::format("Assoc = {}\n", Assoc);
@@ -155,8 +157,8 @@ static void runMeasureTool() {
 }
 
 int main() {
-  std::cerr << "std::chrono::high_resolution_clock::period = " << Clock::period::num
-            << '/' << Clock::period::den << '\n';
+  std::cerr << "std::chrono::high_resolution_clock::period = "
+            << Clock::period::num << '/' << Clock::period::den << '\n';
   if (char *DebugDumpValue = std::getenv("DEBUG_DUMP");
       DebugDumpValue && std::string(DebugDumpValue) == "1") {
     DebugDump = true;
